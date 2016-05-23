@@ -1,0 +1,166 @@
+---
+title: "Reproducable Data Project 1"
+author: "Joe Wood"
+date: "May 22, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This is a analysis report on activity from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+###About the Data:
+The variables included in this dataset are:
+
+* steps: Number of steps taking in a 5-minute interval (missing values are coded as 𝙽𝙰)
+* date: The date on which the measurement was taken in YYYY-MM-DD format 
+* interval: Identifier for the 5-minute interval in which measurement was taken 
+ 
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+ 
+The purpose of this report is to show the results of various questions 
+related to the Project 1 assignment.
+
+-----
+##Loading and preprocessing the data
+
+Statisfies Submission points:
+1. **Code for reading in the dataset and/or processing the data**
+
+We will start by reading in the dataset from the activity.zip file from [orginal source] (https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
+
+```{r}
+unzip("activity.zip", exdir= "./")
+activityDataSet = read.csv("activity.csv")
+head(activityDataSet)
+```
+
+Pre-Process by fixing the dates column
+
+```{r}
+activityDataSet$date <-as.Date(activityDataSet$date, format="%Y-%m-%d")
+```
+
+##What is mean total number of steps taken per day?
+
+Statisfies Submission points: 
+
+2. **Histogram of the total number of steps taken each day** 
+
+3. **Mean and median number of steps taken each day** 
+
+
+Process the data to ignore missing values in the dataset and group by date
+```{r}
+library(dplyr)
+activitiesNoNA <- activityDataSet[complete.cases(activityDataSet), ]
+activityGroupByDates <- group_by(activitiesNoNA, date)
+```
+
+Next we will Calculate the total number of steps taken per day
+
+```{r}
+totalStepsPerDay <- summarize(activityGroupByDates, sum(steps))
+names(totalStepsPerDay) <- c('Date', 'DailyTotal')
+knitr::kable(totalStepsPerDay,format = "markdown", format.args=list(width= 1))
+```
+
+Now that we have the totalStepsPerDay, we create a histogram with this data:
+
+```{r}
+hist(totalStepsPerDay$DailyTotal)
+
+```
+
+Calculate and report the mean and median of the total number of steps taken per day
+```{r}
+mean(totalStepsPerDay$DailyTotal)
+median(totalStepsPerDay$DailyTotal)
+```
+
+##What is the average daily activity pattern?
+
+Statisfies Submission points: 
+
+4. **Time series plot of the average number of steps taken** 
+
+5. **The 5-minute interval that, on average, contains the maximum number of 
+steps** 
+
+Make a time series plot (i.e. 𝚝𝚢𝚙𝚎 = "𝚕") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+Using GGplot, this is the time series plot  of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+library(ggplot2)
+
+activityGroupByInterval <- group_by(activityDataSet, interval)
+totalStepsPerInterval <- summarize(activityGroupByInterval, mean(steps, na.rm = TRUE))
+names(totalStepsPerInterval) <- c("Interval", "Average")
+plot(totalStepsPerInterval$Interval, totalStepsPerInterval$Average, type = 'l')
+
+```
+
+Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+totalStepsPerInterval[totalStepsPerInterval$Average == max(totalStepsPerInterval$Average),]$Interval
+```
+
+##Imputing missing values
+
+Statisfies Submission points: 
+
+6. **Code to describe and show a strategy for imputing missing data** 
+
+7. **Histogram of the total number of steps taken each day after missing values 
+are imputed** 
+
+Note that there are a number of days/intervals where there are missing values (coded as 𝙽𝙰). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+The total number of NA rows is:
+```{r}
+count(activityDataSet[is.na(activityDataSet$steps),])$n
+```
+
+Now we will replace the NAs with the mean for the 5-minute interval
+
+```{r}
+impute.mean <- function(x) replace(x, is.na(x), mean(x, na.rm = TRUE))
+activityDataSetClean <-activityDataSet %>%
+    group_by(interval) %>%
+    mutate(
+        steps = impute.mean(steps)
+    )
+activityDataSetCleanGroupByDates <- group_by(activityDataSetClean, date)
+totalStepsPerDayClean <- summarize(activityDataSetCleanGroupByDates, sum(steps))
+names(totalStepsPerDayClean) <- c('Date', 'DailyTotal')
+hist(totalStepsPerDayClean$DailyTotal)
+
+```
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+Statisfies Submission points: 
+
+8. **Panel plot comparing the average number of steps taken per 5-minute 
+interval across weekdays and weekends** 
+
+Using the weekdays() function, adding a new column to the clean dataset
+
+```{r}
+library(lattice)
+activityDataSetClean$daytype <- NA
+activityDataSetClean[!(weekdays(as.Date(activityDataSetClean$date)) %in% c('Saturday','Sunday')),]$daytype <- 'weekday'
+activityDataSetClean[(weekdays(as.Date(activityDataSetClean$date)) %in% c('Saturday','Sunday')),]$daytype <- 'weekend'
+activityDataSetCleanByinterval <-group_by(activityDataSetClean, interval, daytype)
+totalStepsPerIntervalClean <- summarise(activityDataSetCleanByinterval, mean(steps))
+names(totalStepsPerIntervalClean) <- c("Interval","daytype", "Average")
+xyplot(Average~Interval|daytype, layout = c(1,2), data=totalStepsPerIntervalClean,
+           type = 'l',
+           xlab = "Interval",
+           ylab = "Number of Steps",
+           main = "")
+```
